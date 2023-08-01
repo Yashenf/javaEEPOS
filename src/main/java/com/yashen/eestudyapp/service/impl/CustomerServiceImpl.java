@@ -23,18 +23,45 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
-    public boolean create(CustomerReqDTO customer, Connection conn) {
-        return false;
+    public boolean create(CustomerReqDTO customer, Connection conn) throws SQLException {
+
+        //----------- covert dto to entity
+        return customerRepo.create(new Customer(
+                customer.getId(),
+                customer.getName(),
+                customer.getAddress(),
+                customer.getSalary()
+        ), conn);
     }
 
     @Override
-    public boolean update(CustomerReqDTO customer, String id, Connection conn) {
-        return false;
+    public boolean update(CustomerReqDTO customer, String id, Connection conn) throws SQLException {
+        return customerRepo.update(new Customer(
+                customer.getId(),
+                customer.getName(),
+                customer.getAddress(),
+                customer.getSalary()
+        ), id, conn);
     }
 
     @Override
     public CustomerDTO findById(String id, Connection conn) {
-        return null;
+        Customer customer = null;
+        try {
+            customer = customerRepo.findById(id, conn);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        if (null != customer){
+            return new CustomerDTO(
+                    customer.getId(),
+                    customer.getName(),
+                    customer.getAddress(),
+                    customer.getSalary()
+            );
+        }else {
+            return null;
+        }
     }
 
     @Override
@@ -53,7 +80,7 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
-    public boolean delete(String id, Connection conn) {
-        return false;
+    public boolean delete(String id, Connection conn) throws SQLException {
+        return customerRepo.delete(id, conn);
     }
 }

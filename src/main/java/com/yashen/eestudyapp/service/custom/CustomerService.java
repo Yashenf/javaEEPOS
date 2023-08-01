@@ -10,9 +10,9 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 
 public interface CustomerService extends SuperService {
-    boolean create(CustomerReqDTO customer, Connection conn);
-    boolean update(CustomerReqDTO customer, String id,Connection conn);
-    CustomerDTO findById(String id, Connection conn);
+    boolean create(CustomerReqDTO customer, Connection conn) throws SQLException;
+    boolean update(CustomerReqDTO customer, String id,Connection conn) throws SQLException;
+    CustomerDTO findById(String id, Connection conn) throws SQLException;
     ArrayList<CustomerDTO> findAll(Connection conn) throws SQLException;
-    boolean delete(String id,Connection conn);
+    boolean delete(String id,Connection conn) throws SQLException;
 }

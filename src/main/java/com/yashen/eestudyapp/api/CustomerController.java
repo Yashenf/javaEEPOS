@@ -1,6 +1,7 @@
 package com.yashen.eestudyapp.api;
 
 import com.yashen.eestudyapp.dto.core.CustomerDTO;
+import com.yashen.eestudyapp.dto.req.CustomerReqDTO;
 import com.yashen.eestudyapp.dto.resp.CustomerRespDTO;
 import com.yashen.eestudyapp.service.impl.CustomerServiceImpl;
 import com.yashen.eestudyapp.service.serviceFactory.ServiceFactory;
@@ -9,6 +10,7 @@ import com.yashen.eestudyapp.util.JsonContext;
 import com.yashen.eestudyapp.util.dbcp.PoolConnection;
 import com.yashen.eestudyapp.util.resp.StandardResponseEntity;
 import jakarta.json.bind.Jsonb;
+import lombok.SneakyThrows;
 import org.apache.commons.dbcp2.BasicDataSource;
 
 import javax.json.*;
@@ -26,128 +28,206 @@ import java.util.ArrayList;
 public class CustomerController extends HttpServlet {
 
     private CustomerServiceImpl customerService;
+
     public CustomerController() {
-        customerService= ServiceFactory.getServiceFactory().getService(ServiceTypes.CUSTOMER);
+        customerService = ServiceFactory.getServiceFactory().getService(ServiceTypes.CUSTOMER);
     }
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        System.out.println("Hello get");
+        String action = req.getParameter("action");
+        Connection conn = null;
         try {
-            Connection conn = PoolConnection.getConn(req);
-            ArrayList<CustomerDTO> all = customerService.findAll(conn);
-            System.out.println("getAll:- "+all);
-            String jsonResp = JsonContext.getJsonb().toJson(new StandardResponseEntity(
-                    201,
-                    "OK",
-                    all
-            ));
-            resp.setContentType("application/json");
-            resp.getWriter().print(jsonResp);
+            conn = PoolConnection.getConn(req);
         } catch (SQLException e) {
             String jsonResp = JsonContext.getJsonb().toJson(new StandardResponseEntity(
                     501,
+                    "Connection Not Provide!",
+                    null
+            ));
+            resp.setContentType("application/json");
+            resp.getWriter().print(jsonResp);
+        }
+        if (action != null) {
+            if (action.equals("getAll")) {
+                try {
+                    ArrayList<CustomerDTO> all = customerService.findAll(conn);
+                    System.out.println("getAll:- " + all);
+                    String jsonResp = JsonContext.getJsonb().toJson(new StandardResponseEntity(
+                            201,
+                            "OK",
+                            all
+                    ));
+                    resp.setContentType("application/json");
+                    resp.getWriter().print(jsonResp);
+                } catch (SQLException e) {
+                    String jsonResp = JsonContext.getJsonb().toJson(new StandardResponseEntity(
+                            501,
+                            "Server side error",
+                            e.getLocalizedMessage()
+                    ));
+                    resp.setContentType("application/json");
+                    resp.getWriter().print(jsonResp);
+                }
+            } else if (action.equals("findOne")) {
+                String id = req.getParameter("id");
+                System.out.println("Id in Api layer is :- " + id);
+                CustomerDTO cusById = customerService.findById(id, conn);
+                StandardResponseEntity rspEntity;
+                System.out.println("In Api layer :- " + cusById);
+                if (null != cusById) {
+                    rspEntity = new StandardResponseEntity(
+                            201,
+                            "OK",
+                            cusById
+                    );
+                } else {
+                    rspEntity = new StandardResponseEntity(
+                            201,
+                            "OK",
+                            "No Data Available"
+                    );
+                }
+                String jsonResp = JsonContext.getJsonb().toJson(rspEntity);
+                resp.setContentType("application/json");
+                resp.getWriter().print(jsonResp);
+            } else {
+                String jsonResp = JsonContext.getJsonb().toJson(new StandardResponseEntity(
+                        403,
+                        "Bad Request. wrong action type (getAll OR findOne)",
+                        null
+                ));
+                resp.setContentType("application/json");
+                resp.getWriter().print(jsonResp);
+            }
+
+        } else {
+            String jsonResp = JsonContext.getJsonb().toJson(new StandardResponseEntity(
+                    501,
                     "Server side error",
-                    e.getLocalizedMessage()
+                    null
             ));
             resp.setContentType("application/json");
             resp.getWriter().print(jsonResp);
         }
 
+        resp.setStatus(201);
     }
-    
 
+
+    @SneakyThrows
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        Connection conn = PoolConnection.getConn(req);
+        StringBuilder stringBuilder = new StringBuilder();
+        String line;
+        try {
+            while ((line = req.getReader().readLine()) != null) {
+                stringBuilder.append(line);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        String jsonString = stringBuilder.toString();
+        Jsonb jsonb = JsonContext.getJsonb();
+        CustomerReqDTO dto = jsonb.fromJson(jsonString, CustomerReqDTO.class);
+        System.out.println("DTO is :-" + dto);
+        boolean b = customerService.create(dto, conn);
+        String jsonResp;
+        if (b) {
+            jsonResp = JsonContext.getJsonb().toJson(new StandardResponseEntity(
+                    201,
+                    "Customer Saved",
+                    dto.getId()
+            ));
 
+        }else {
+            jsonResp = JsonContext.getJsonb().toJson(new StandardResponseEntity(
+                    403,
+                    "Bad Request. Not saved",
+                    null
+            ));
+        }
+        resp.setContentType("application/json");
+        resp.getWriter().print(jsonResp);
     }
 
+
+
+    @SneakyThrows
     @Override
     protected void doPut(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        resp.setContentType("application/json");
+        Connection conn = PoolConnection.getConn(req);
+        //Get DTO
+        StringBuilder stringBuilder = new StringBuilder();
+        String line;
         try {
-            resp.setContentType("application/json");
-            Class.forName("com.mysql.cj.jdbc.Driver");
-            Connection conn = DriverManager.getConnection(
-                    "jdbc:mysql://localhost:3306/thogakade",
-                    "root",
-                    "1234"
-            );
-            PreparedStatement psmt = conn.prepareStatement("UPDATE customer SET name=? , address=? , salary=? WHERE id=?");
-            JsonReader reader = Json.createReader(req.getReader());
-            JsonObject jsonObject = reader.readObject();
-            psmt.setString(4,jsonObject.getString("cusId"));
-            System.out.println(jsonObject.getString("cusId"));
-            psmt.setString(1,jsonObject.getString("cusName"));
-            psmt.setString(2,jsonObject.getString("cusAddress"));
-            psmt.setDouble(3, Double.parseDouble(jsonObject.getString("salary")));
-            System.out.println(Double.parseDouble(jsonObject.getString("salary")));
-            int i = psmt.executeUpdate();
-            conn.close();
-            if (i > 0) {
-                JsonObjectBuilder builder = Json.createObjectBuilder();
-                builder.add("status",HttpServletResponse.SC_OK);
-                builder.add("message","Customer Updated");
-                builder.add("data",jsonObject.getString("cusId"));
-                resp.getWriter().print(builder.build());
-            } else {
-                JsonObjectBuilder builder = Json.createObjectBuilder();
-                builder.add("status",HttpServletResponse.SC_BAD_GATEWAY);
-                builder.add("message","Customer Not Updated");
-                builder.add("data","empty");
-                resp.getWriter().print(builder.build());
+            while ((line = req.getReader().readLine()) != null) {
+                stringBuilder.append(line);
             }
-
-        } catch (ClassNotFoundException | SQLException e) {
-            JsonObjectBuilder builder = Json.createObjectBuilder();
-            builder.add("status",HttpServletResponse.SC_SERVICE_UNAVAILABLE);
-            builder.add("message","Request Failed");
-            builder.add("data",e.getLocalizedMessage());
-            resp.getWriter().print(builder.build());
+        } catch (IOException e) {
+            e.printStackTrace();
         }
+        String jsonString = stringBuilder.toString();
+        Jsonb jsonb = JsonContext.getJsonb();
+        CustomerReqDTO dto = jsonb.fromJson(jsonString, CustomerReqDTO.class);
+
+        //Get ID
+        String id = req.getParameter("id");
+
+        boolean flag = customerService.update(dto, id, conn);
+
+        String jsonResp;
+        if (flag){
+            jsonResp = JsonContext.getJsonb().toJson(new StandardResponseEntity(
+                    201,
+                    "Updated",
+                    dto
+            ));
+        }else {
+            jsonResp = JsonContext.getJsonb().toJson(new StandardResponseEntity(
+                    403,
+                    "Bad Request. Not Updated",
+                    id
+            ));
+        }
+
+        resp.getWriter().print(jsonResp);
     }
 
+    @SneakyThrows
     @Override
     protected void doDelete(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        try {
-            Class.forName("com.mysql.cj.jdbc.Driver");
-            Connection conn = DriverManager.getConnection(
-                    "jdbc:mysql://localhost:3306/thogakade",
-                    "root",
-                    "1234"
-            );
-            PreparedStatement psmt = conn.prepareStatement("DELETE FROM customer WHERE id=?");
-            psmt.setString(1,req.getParameter("cusId"));
+        Connection conn = PoolConnection.getConn(req);
+        resp.setContentType("application/json");
 
-            int i = psmt.executeUpdate();
-            conn.close();
-            if (i > 0) {
-                JsonObjectBuilder builder = Json.createObjectBuilder();
-                builder.add("status",HttpServletResponse.SC_OK);
-                builder.add("message","Customer Deleted");
-                builder.add("data","");
-                resp.getWriter().print(builder.build());
-            } else {
-                JsonObjectBuilder builder = Json.createObjectBuilder();
-                builder.add("status",HttpServletResponse.SC_BAD_REQUEST);
-                builder.add("message","Customer Not Deleted");
-                builder.add("data","");
-                resp.getWriter().print(builder.build());
-            }
+        //get customer id
+        String id = req.getParameter("id");
 
-        } catch (ClassNotFoundException | SQLException e) {
-            JsonObjectBuilder builder = Json.createObjectBuilder();
-            builder.add("status",HttpServletResponse.SC_SERVICE_UNAVAILABLE);
-            builder.add("message","Request Failed");
-            builder.add("data",e.getLocalizedMessage());
-            resp.getWriter().print(builder.build());
+        boolean flag = customerService.delete(id, conn);
+
+        String jsonResp;
+        if (flag){
+            jsonResp = JsonContext.getJsonb().toJson(new StandardResponseEntity(
+                    201,
+                    "Deleted",
+                    id
+            ));
+        }else {
+            jsonResp = JsonContext.getJsonb().toJson(new StandardResponseEntity(
+                    403,
+                    "Bad Request. Not Deleted",
+                    id
+            ));
         }
+
+        resp.getWriter().print(jsonResp);
     }
 
     @Override
     protected void doOptions(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        System.out.println(req.getParameter("cusId"));
-        System.out.println(req.getParameter("cusName"));
-        System.out.println(req.getParameter("cusAddress"));
+
     }
 
 
